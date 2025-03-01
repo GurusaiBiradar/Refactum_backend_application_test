@@ -40,3 +40,8 @@ Edges describe the connection between the surfaces. The edges contain informatio
 ### Results of the test:
 
 ![Alt Text](Workpiece_graph.png)
+
+![Alt Text](Feature_graph.png)
+
+![Alt Text](results.png)
+
