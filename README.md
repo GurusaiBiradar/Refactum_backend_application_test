@@ -43,5 +43,5 @@ Edges describe the connection between the surfaces. The edges contain informatio
 
 ![Alt Text](Feature_graph.png)
 
-![Alt Text](result.png)
+![Alt Text](result .png)
 
