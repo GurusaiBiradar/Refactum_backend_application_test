@@ -35,3 +35,8 @@ Edges describe the connection between the surfaces. The edges contain informatio
 -   Print the results in graph_search_task.py number 4)
 -   Commit your changes to your repository
 -   Send us the link to your repository with the results
+
+
+### Results of the test:
+
+![Alt Text](Workpiece_graph.png)
