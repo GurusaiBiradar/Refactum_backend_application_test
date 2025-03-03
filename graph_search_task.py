@@ -11,22 +11,37 @@ import matplotlib.pyplot as plt
 
 # Note: Available files are: workpiece_graph.json, feature_graph.json
 
-def load_graph_from_json(file_path):
+def load_graph(file_path):
     with open(file_path, 'r') as f:
         data = json.load(f)
     G = nx.Graph()
-    for node in data.get("nodes", []):
-        node_id, attrs = node
+    
+    # Add nodes
+    for node_entry in data.get("nodes", []):
+        node_id, attrs = node_entry
         G.add_node(node_id, **attrs)
-    for edge in data.get("edges", []):
-        source, target, attrs = edge
-        G.add_edge(source, target, **attrs)
+    
+    # Add edges 
+    if "edges" in data:
+        # Case 1: Explicit edges (like in feature_graph.json)
+        for edge in data.get("edges", []):
+            src, dst, attrs = edge
+            G.add_edge(src, dst, **attrs)
+    else:
+        # Case 2: Edges from connected_faces (like in workpiece_graph.json)
+        for node_entry in data.get("nodes", []):
+            node_id, attrs = node_entry
+            for neighbor in attrs.get("connected_faces", []):
+                # Use default angular_type if not specified
+                edge_attrs = {"angular_type": "CONVEX"}
+                G.add_edge(node_id, neighbor, **edge_attrs)
+    
     return G
 
 # Load graphs
 script_dir = os.path.dirname(os.path.abspath(__file__))
-feature_graph = load_graph_from_json(os.path.join(script_dir, 'feature_graph.json'))
-workpiece_graph = load_graph_from_json(os.path.join(script_dir, 'workpiece_graph.json'))
+workpiece_graph = load_graph(os.path.join(script_dir, "workpiece_graph.json"))
+feature_graph = load_graph(os.path.join(script_dir, "feature_graph.json"))
 
 # ##################################################
 # 2) Create graphs from loaded data
@@ -38,7 +53,7 @@ workpiece_graph = load_graph_from_json(os.path.join(script_dir, 'workpiece_graph
 def visualize_graph(graph, title):
     plt.figure(figsize=(12, 8))
     
-    # Create node colors based on type
+    # Node styling
     color_map = {
         'plane': '#2ecc71',    # Green
         'cylinder': '#e74c3c', # Red
@@ -54,10 +69,8 @@ def visualize_graph(graph, title):
         node_colors.append(color_map.get(node_type, color_map['other']))
         labels[node] = f"{node}\n({node_type})"
     
-    # Generate layout positions
     pos = nx.spring_layout(graph, seed=42)
     
-    # Draw graph elements
     nx.draw_networkx_nodes(graph, pos, node_color=node_colors, node_size=800)
     nx.draw_networkx_edges(graph, pos, width=2, alpha=0.7)
     nx.draw_networkx_labels(graph, pos, labels, font_size=10, font_color='black')
@@ -74,28 +87,24 @@ visualize_graph(workpiece_graph, "Workpiece Graph")
 print("\nVisualizing feature graph...")
 visualize_graph(feature_graph, "Feature Graph")
 
-# Note: Optional task - Visualize the graph
-# Example code:
-# from pyvis.network import Network
-# nt = Network()
-# nt.from_nx(workpiece_graph)
-# nt.show("graph.html", notebook=False)
-
 # ##################################################
 # 3) Check if the feature graph is a subgraph of the workpiece workpiece and find any other matching subgraphs
 # ##################################################
 
-def node_match(node1, node2):
-    return node1.get('type') == node2.get('type')
+def node_match(n1_attrs, n2_attrs):
+    """Match nodes based on type"""
+    return n1_attrs.get("type") == n2_attrs.get("type")
 
-def edge_match(edge1, edge2):
-    return edge1.get('angular_type') == edge2.get('angular_type')
+def edge_match(e1_attrs, e2_attrs):
+    """Match edges based on angular_type"""
+    return e1_attrs.get("angular_type") == e2_attrs.get("angular_type")
 
-def find_matching_subgraphs(feature_g, workpiece_g):
-    matcher = GraphMatcher(workpiece_g, feature_g, node_match=node_match, edge_match=edge_match)
-    return list(matcher.subgraph_isomorphisms_iter())
-
-matching_subgraphs = find_matching_subgraphs(feature_graph, workpiece_graph)
+GM = GraphMatcher(
+    workpiece_graph,  # Supergraph
+    feature_graph,    # Subgraph
+    node_match=node_match,
+    edge_match=edge_match
+)
 
 # ##################################################
 # 4) Results
@@ -103,15 +112,16 @@ matching_subgraphs = find_matching_subgraphs(feature_graph, workpiece_graph)
 
 # Print results if matches are found. Return the number of matches and the node ids.
 
-def print_results(matches):
-    if not matches:
-        print("No matching subgraphs found.")
-        return
-    
-    print(f"Found {len(matches)} matching subgraphs:")
-    for i, mapping in enumerate(matches, 1):
-        print(f"Match {i}:")
-        for fg_node, wp_node in mapping.items():
-            print(f"  Feature node {fg_node} -> Workpiece node {wp_node}")
+print("\n--- Results ---")
+print("Feature graph is a subgraph of workpiece graph:", GM.subgraph_is_isomorphic())
 
-print_results(matching_subgraphs)
+if GM.subgraph_is_isomorphic():
+    matches = list(GM.subgraph_isomorphisms_iter())
+    print(f"Number of matches: {len(matches)}")
+    for idx, mapping in enumerate(matches, 1):
+        print(f"\nMatch {idx}:")
+        for workpiece_node, feature_node in mapping.items():
+            print(f"  Feature node {feature_node} ({feature_graph.nodes[feature_node]['type']}) "
+                  f"→ Workpiece node {workpiece_node} ({workpiece_graph.nodes[workpiece_node]['type']})")
+else:
+    print("No matches found.")
